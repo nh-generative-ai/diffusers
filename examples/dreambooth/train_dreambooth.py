@@ -117,7 +117,7 @@ def log_validation(
     weight_dtype,
     global_step,
     prompt_embeds,
-    negative_prompt_embeds,
+    negative_prompt_embeds
 ):
     logger.info(
         f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
@@ -131,6 +131,9 @@ def log_validation(
 
     if text_encoder is not None:
         text_encoder = accelerator.unwrap_model(text_encoder)
+
+    if args.cache_dir is not None:
+        pipeline_args["cache_dir"] = args.cache_dir
 
     # create pipeline (note: unet and vae are loaded again in float32)
     pipeline = DiffusionPipeline.from_pretrained(
@@ -233,6 +236,12 @@ def parse_args(input_args=None):
         default=None,
         required=True,
         help="Path to pretrained model or model identifier from huggingface.co/models.",
+    )
+    parser.add_argument(
+        "--cache_dir",
+        type=str,
+        default=None,
+        help="Which directory to cache huggingface models to.",
     )
     parser.add_argument(
         "--revision",
@@ -854,11 +863,17 @@ def main(args):
                 torch_dtype = torch.float16
             elif args.prior_generation_precision == "bf16":
                 torch_dtype = torch.bfloat16
+
+            pipeline_args = {}
+            if args.cache_dir is not None:
+                pipeline_args["cache_dir"] = args.cache_dir
+            
             pipeline = DiffusionPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
                 torch_dtype=torch_dtype,
                 safety_checker=None,
                 revision=args.revision,
+                **pipeline_args
             )
             pipeline.set_progress_bar_config(disable=True)
 
@@ -1374,6 +1389,9 @@ def main(args):
 
         if args.skip_save_text_encoder:
             pipeline_args["text_encoder"] = None
+
+        if args.cache_dir is not None:
+            pipeline_args["cache_dir"] = args.cache_dir
 
         pipeline = DiffusionPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
